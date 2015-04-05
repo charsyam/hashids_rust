@@ -1,0 +1,9 @@
+[package]
+
+name = "hashids"
+version = "0.0.1"
+authors = [ "charsyam <charsyam@gmail.com>" ]
+
+[[bin]]
+
+name = "hashids"

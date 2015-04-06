@@ -428,8 +428,14 @@ fn main() {
   let encode = ids.encrypt(&numbers);
   println!("{}", encode);
 
-  let longs = ids.decrypt(encode);
+  let longs = ids.decrypt(encode.clone());
   for s in longs.iter() {
+    println!("longs: {}", s);
+  }
+
+  let ids3 = HashIds::new_with_salt("this is my pepper".to_string());
+  let longs2 = ids3.decrypt(encode.clone());
+  for s in longs2.iter() {
     println!("longs: {}", s);
   }
 
@@ -439,4 +445,43 @@ fn main() {
 
   let o = ids2.decode_hex(i);
   println!("{}", o);
+
+  let ids3 = HashIds::new_with_salt("this is my salt".to_string());
+  let numbers3: Vec<i64> = vec![683, 94108, 123, 5];
+  let encode3 = ids3.encrypt(&numbers3);
+  println!("ids3 = {}", encode3);
+
+  let ids4 = HashIds::new_with_salt("this is my salt".to_string());
+  let numbers4: Vec<i64> = vec![5, 5, 5, 5];
+  let encode4 = ids4.encrypt(&numbers4);
+  println!("ids4 = {}", encode4);
+
+  let ids5 = HashIds::new_with_salt("this is my salt".to_string());
+  let numbers5: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  let encode5 = ids5.encrypt(&numbers5);
+  println!("ids5 = {}", encode5);
+
+  let ids6 = HashIds::new_with_salt("this is my salt".to_string());
+  let numbers_1: Vec<i64> = vec![1];
+  let encode_1 = ids6.encrypt(&numbers_1);
+  println!("encode_1 = {}", encode_1);
+  let numbers_2: Vec<i64> = vec![2];
+  let encode_2 = ids6.encrypt(&numbers_2);
+  println!("encode_2 = {}", encode_2);
+  let numbers_3: Vec<i64> = vec![3];
+  let encode_3 = ids6.encrypt(&numbers_3);
+  println!("encode_3 = {}", encode_3);
+  let numbers_4: Vec<i64> = vec![4];
+  let encode_4 = ids6.encrypt(&numbers_4);
+  println!("encode_4 = {}", encode_4);
+  let numbers_5: Vec<i64> = vec![5];
+  let encode_5 = ids6.encrypt(&numbers_5);
+  println!("encode_5 = {}", encode_5);
+
+  let ids7 = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
+  let numbers7 : Vec<i64> = vec![1];
+  let encode7 = ids7.encrypt(&numbers_1);
+  println!("ids7 = {}", encode7);
+
+  println!("ids7 decrypt = {}", ids7.decrypt(encode7)[0]);
 }

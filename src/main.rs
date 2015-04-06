@@ -292,6 +292,11 @@ impl HashIds {
       ret.push(HashIds::unhash(sub_hash, alphabet.clone()));
     }
 
+    let check_hash = self._encode(&ret);
+    if check_hash != hash {
+      return Vec::new();
+    }
+
     ret
   }
 
@@ -436,7 +441,7 @@ fn main() {
   let ids3 = HashIds::new_with_salt("this is my pepper".to_string());
   let longs2 = ids3.decrypt(encode.clone());
   for s in longs2.iter() {
-    println!("longs: {}", s);
+    println!("bad longs: {}", s);
   }
 
   let ids2 = HashIds::new_with_salt("this is my salt".to_string());

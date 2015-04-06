@@ -57,7 +57,7 @@ Decryption will not work if salt is changed:
 
 ```rust
 let ids = HashIds::new_with_salt("this is my pepper".to_string());
-long[] numbers = hashids.decrypt("NkK9");
+let numbers = ids.decrypt("NkK9");
 ```
 
 `numbers` is now going to be:

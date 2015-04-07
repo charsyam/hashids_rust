@@ -54,7 +54,7 @@ let encode = ids.encode(&numbers);
 
 #### Decrypting
 
-Notice during decodeion, same salt value is used:
+Notice during decoding, same salt value is used:
 
 ```rust
 let longs = ids.decode("NkK9".to_string());

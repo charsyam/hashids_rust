@@ -22,6 +22,14 @@ All (long) integers need to be greater than or equal to zero.
 
 ## Usage
 
+#### Import the package
+```rust
+extern crate hashids;
+use hashids::HashIds;
+```
+
+see tests/lib.rs
+
 #### Encrypting one number
 
 You can pass a unique salt value so your hashes differ from everyone else's. I use "this is my salt" as an example.

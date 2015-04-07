@@ -13,7 +13,6 @@ const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
 const SEPARTOR_DIV: f32 = 3.5;
 const GUARD_DIV: u32 = 12;
 const MIN_ALPHABET_LENGTH: usize = 16;
-const VERSION: &'static str = "1.0.0";
 
 pub enum HashIdsError { InvalidAlphabetLength }
 
@@ -323,7 +322,7 @@ impl HashIds {
       let v = input_slice[i] as usize;
       let pos = HashIds::index_of(alpha_slice, v as u8);
       let pow_size = (len - i - 1) as usize;
-      number += ((pos * alpha_len.pow(pow_size)) as i64);
+      number += (pos * alpha_len.pow(pow_size)) as i64;
       i += 1;
     }
 
@@ -354,7 +353,7 @@ impl HashIds {
     let mut number_hash_int  = 0;
     let mut count = 100;
     for number in numbers.iter() {
-      number_hash_int += (*number % count);
+      number_hash_int += *number % count;
       count += 1;
     }
 
@@ -407,7 +406,7 @@ impl HashIds {
       ret_str = t_ret;
 
       let excess = ret_str.len() as i64 - self.min_hash_length as i64;
-      if (excess > 0) {
+      if excess > 0 {
         let start_pos = (excess as i64 / 2) as usize;
         ret_str = ret_str.slice(start_pos, start_pos + self.min_hash_length).to_string();
       }

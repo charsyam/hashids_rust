@@ -7,3 +7,8 @@ description = "HashIds Rust Implementation"
 repository = "https://github.com/charsyam/hashids_rust"
 keywords = ["rust", "hashids"]
 license = "MIT"
+
+include = [
+  "**/*.rs",
+  "Cargo.toml",
+]

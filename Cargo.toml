@@ -1,9 +1,9 @@
 [package]
 
 name = "hashids"
-version = "0.0.1"
+version = "1.0.0"
 authors = [ "charsyam <charsyam@gmail.com>" ]
-
-[[bin]]
-
-name = "hashids"
+description = "HashIds Rust Implementation"
+repository = "https://github.com/charsyam/hashids_rust"
+keywords = ["rust", "hashids"]
+license = "MIT"

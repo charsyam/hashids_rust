@@ -4,19 +4,19 @@ A Rust port of the JavaScript *hashids* implementation. It generates YouTube-lik
 
 ## What is it?
 
-hashids (Hash ID's) creates short, unique, decryptable hashes from unsigned (long) integers.
+hashids (Hash ID's) creates short, unique, decodeable hashes from unsigned (long) integers.
 
 It was designed for websites to use in URL shortening, tracking stuff, or making pages private (or at least unguessable).
 
 This algorithm tries to satisfy the following requirements:
 
-1. Hashes must be unique and decryptable.
+1. Hashes must be unique and decodable.
 2. They should be able to contain more than one integer (so you can use them in complex or clustered systems).
 3. You should be able to specify minimum hash length.
 4. Hashes should not contain basic English curse words (since they are meant to appear in public places - like the URL).
 
 Instead of showing items as `1`, `2`, or `3`, you could show them as `U6dc`, `u87U`, and `HMou`.
-You don't have to store these hashes in the database, but can encrypt + decrypt on the fly.
+You don't have to store these hashes in the database, but can encode + decode on the fly.
 
 All (long) integers need to be greater than or equal to zero.
 
@@ -29,7 +29,7 @@ You can pass a unique salt value so your hashes differ from everyone else's. I u
 ```rust
 let ids = HashIds::new_with_salt("this is my salt".to_string());
 let numbers: Vec<i64> = vec![12345];
-let encode = ids.encrypt(&numbers);
+let encode = ids.encode(&numbers);
 ```
 
 `hash` is now going to be:
@@ -38,10 +38,10 @@ let encode = ids.encrypt(&numbers);
 
 #### Decrypting
 
-Notice during decryption, same salt value is used:
+Notice during decodeion, same salt value is used:
 
 ```rust
-let longs = ids.decrypt("NkK9".to_string());
+let longs = ids.decode("NkK9".to_string());
 for s in longs.iter() {
   println!("longs: {}", s);
 }
@@ -57,7 +57,7 @@ Decryption will not work if salt is changed:
 
 ```rust
 let ids = HashIds::new_with_salt("this is my pepper".to_string());
-let numbers = ids.decrypt("NkK9");
+let numbers = ids.decode("NkK9");
 ```
 
 `numbers` is now going to be:
@@ -69,7 +69,7 @@ let numbers = ids.decrypt("NkK9");
 ```Rust
 let ids = HashIds::new_with_salt("this is my salt".to_string());
 let numbers: Vec<i64> = vec![683, 94108, 123, 5];
-let encode = ids.encrypt(&numbers);
+let encode = ids.encode(&numbers);
 ```
 
 `hash` is now going to be:
@@ -80,7 +80,7 @@ let encode = ids.encrypt(&numbers);
 
 ```rust
 let ids = HashIds::new_with_salt("this is my salt".to_string());
-let longs = ids.decrypt("NkK9".to_string());
+let longs = ids.decode("NkK9".to_string());
 for s in longs.iter() {
   println!("longs: {}", s);
 }
@@ -92,12 +92,12 @@ for s in longs.iter() {
 
 #### Encrypting and specifying minimum hash length
 
-Here we encrypt integer 1, and set the minimum hash length to **8** (by default it's **0** -- meaning hashes will be the shortest possible length).
+Here we encode integer 1, and set the minimum hash length to **8** (by default it's **0** -- meaning hashes will be the shortest possible length).
 
 ```rust
 let ids7 = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
 let numbers7 : Vec<i64> = vec![1];
-let encode7 = ids7.encrypt(&numbers_1);
+let encode7 = ids7.encode(&numbers_1);
 ```
 
 `hash` is now going to be:
@@ -108,7 +108,7 @@ let encode7 = ids7.encrypt(&numbers_1);
 
 ```rust
 let ids7 = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
-ids7.decrypt("gB0NV05e")[0]
+ids7.decode("gB0NV05e")[0]
 ```
 
 `numbers` is now going to be:
@@ -122,7 +122,7 @@ Here we set the alphabet to consist of only four letters: "0123456789abcdef"
 ```rust
 
 Hashids hashids = new Hashids("this is my salt", 0, "0123456789abcdef");
-String hash = hashids.encrypt(1234567L);
+String hash = hashids.encode(1234567L);
 ```
 
 `hash` is now going to be:
@@ -139,7 +139,7 @@ Having said that, this algorithm does try to make these hashes unguessable and u
 ```rust
 let ids4 = HashIds::new_with_salt("this is my salt".to_string());
 let numbers4: Vec<i64> = vec![5, 5, 5, 5];
-let encode4 = ids4.encrypt(&numbers4);
+let encode4 = ids4.encode(&numbers4);
 ```
 
 You don't see any repeating patterns that might show there's 4 identical numbers in the hash:
@@ -151,7 +151,7 @@ Same with incremented numbers:
 ```rust
 let ids5 = HashIds::new_with_salt("this is my salt".to_string());
 let numbers5: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-let encode5 = ids5.encrypt(&numbers5);
+let encode5 = ids5.encode(&numbers5);
 ```
 
 `hash` will be :
@@ -164,19 +164,19 @@ let encode5 = ids5.encrypt(&numbers5);
   let ids6 = HashIds::new_with_salt("this is my salt".to_string());
 
   let numbers_1: Vec<i64> = vec![1];
-  let encode_1 = ids6.encrypt(&numbers_1);
+  let encode_1 = ids6.encode(&numbers_1);
 
   let numbers_2: Vec<i64> = vec![2];
-  let encode_2 = ids6.encrypt(&numbers_2);
+  let encode_2 = ids6.encode(&numbers_2);
 
   let numbers_3: Vec<i64> = vec![3];
-  let encode_3 = ids6.encrypt(&numbers_3);
+  let encode_3 = ids6.encode(&numbers_3);
 
   let numbers_4: Vec<i64> = vec![4];
-  let encode_4 = ids6.encrypt(&numbers_4);
+  let encode_4 = ids6.encode(&numbers_4);
 
   let numbers_5: Vec<i64> = vec![5];
-  let encode_5 = ids6.encrypt(&numbers_5);
+  let encode_5 = ids6.encode(&numbers_5);
 ```
 
 ## Bad hashes

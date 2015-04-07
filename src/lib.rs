@@ -1,37 +1,44 @@
+#![crate_name = "hashids"]
+#![allow(unstable)]
+
 extern crate regex;
 
-static DEFAULT_ALPHABET: &'static str =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-static DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
-static SEP_DIV: f32 = 3.5;
-static GUARD_DIV: u32 = 12;
-static MIN_ALPHABET_LENGTH: usize = 16;
+use std::num::Float;
+use std::collections::HashMap;
+use regex::Regex;
+use std::num;
 
+const DEFAULT_ALPHABET: &'static str =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
+const SEPARTOR_DIV: f32 = 3.5;
+const GUARD_DIV: u32 = 12;
+const MIN_ALPHABET_LENGTH: usize = 16;
+const VERSION: &'static str = "1.0.0";
 
-struct HashIds {
+pub enum HashIdsError { InvalidAlphabetLength }
+
+pub struct HashIds {
   salt: String,
-  alphabet: String,
+  pub alphabet: String,
   separators: String,
   min_hash_length: usize,
   guards: String 
 }
 
 impl HashIds {
-
-  pub fn new(salt: String, min_hash_length: usize, alphabet: String) -> HashIds {
-    use std::num::Float;
-
+  pub fn new(salt: String, min_hash_length: usize, alphabet: String) -> Result<HashIds, HashIdsError>  {
     let min_length = HashIds::get_min_hash_length(min_hash_length);
     let unique_alphabet = HashIds::get_unique_alphabet(alphabet);
 
-    if unique_alphabet.len() < ::MIN_ALPHABET_LENGTH {
-      //Error
+    if unique_alphabet.len() < MIN_ALPHABET_LENGTH {
+      return Err(HashIdsError::InvalidAlphabetLength);
     }
 
     let (t_separators, mut t_alphabet) = HashIds::get_separators(unique_alphabet);
     let mut shuffled_separators = HashIds::hashids_shuffle(t_separators.clone(), salt.clone());
 
     if HashIds::need_manipulate(shuffled_separators.len(), t_alphabet.len()) == true {
-      let mut seps_len =  ((t_alphabet.len() as f32) / ::SEP_DIV) as usize;
+      let mut seps_len =  ((t_alphabet.len() as f32) / SEPARTOR_DIV) as usize;
       if seps_len == 1 {
         seps_len += 1;
       }
@@ -46,11 +53,11 @@ impl HashIds {
     }
 
     let mut shuffled_alphabet = HashIds::hashids_shuffle(t_alphabet.clone(), salt.clone());
-    let guard_count = (shuffled_alphabet.len() as f32 / ::GUARD_DIV as f32).ceil() as usize;
+    let guard_count = (shuffled_alphabet.len() as f32 / GUARD_DIV as f32).ceil() as usize;
 
     let mut t_guards;
 
-    if guard_count < 3 {
+    if shuffled_alphabet.len() < 3 {
       t_guards = shuffled_separators.slice(0, guard_count).to_string();
       shuffled_separators = shuffled_separators.slice_from(guard_count).to_string(); 
     } else {
@@ -58,26 +65,26 @@ impl HashIds {
       shuffled_alphabet = shuffled_alphabet.slice_from(guard_count).to_string(); 
     }
     
-    HashIds {
+    Ok(HashIds {
       salt: salt,
       min_hash_length: min_length,
       guards: t_guards,
       separators: shuffled_separators,
       alphabet: shuffled_alphabet
-    }
+    })
   }
 
-  pub fn new_with_salt_and_min_length(salt: String, min_hash_length: usize) -> HashIds {
+  pub fn new_with_salt_and_min_length(salt: String, min_hash_length: usize) -> Result<HashIds, HashIdsError> {
     HashIds::new(salt, min_hash_length, DEFAULT_ALPHABET.to_string())
   }
 
-  pub fn new_with_salt(salt: String) -> HashIds {
+  pub fn new_with_salt(salt: String) -> Result<HashIds, HashIdsError> {
     HashIds::new_with_salt_and_min_length(salt, 0)
   }
 
 
   fn need_manipulate(slen: usize, alen: usize) -> bool {
-    if slen <= 0 && (((alen/slen) as f32)> ::SEP_DIV) {
+    if slen <= 0 && (((alen/slen) as f32)> SEPARTOR_DIV) {
       return true;
     }
 
@@ -93,7 +100,7 @@ impl HashIds {
   }
 
   fn get_separators(alphabet: String) -> (String, String) {
-    HashIds::get_non_duplicated_string(::DEFAULT_SEPARATORS.to_string(), alphabet)
+    HashIds::get_non_duplicated_string(DEFAULT_SEPARATORS.to_string(), alphabet)
   }
 
   fn hashids_shuffle(alphabet: String, salt: String) -> String {
@@ -132,7 +139,6 @@ impl HashIds {
   }
 
   fn get_non_duplicated_string(separators: String, alphabet: String) -> (String, String) {
-    use std::collections::HashMap;
     let mut check_separator_map = HashMap::new();
     let mut check_alphabet_map = HashMap::new();
 
@@ -163,8 +169,6 @@ impl HashIds {
   }
 
   fn get_unique_alphabet(alphabet: String) -> String {
-    use std::collections::HashMap;
-
     let mut unique_alphabet: String = String::new();
     let mut check_map = HashMap::new();
     
@@ -178,17 +182,7 @@ impl HashIds {
     unique_alphabet
   }
 
-  fn encrypt(&self, numbers: &Vec<i64>) -> String {
-    return self.encode(numbers);
-  }
-
-  fn decrypt(&self, hash: String) -> Vec<i64> {
-    return self.decode(hash);
-  }
-
-  fn encode_hex(&self, hex: String) -> String {
-    use regex::Regex;
-    use std::num;
+  pub fn encode_hex(&self, hex: String) -> String {
     let regex1 = Regex::new(r"^[0-9a-fA-F]+$").unwrap();
     if regex1.is_match(hex.as_slice()) == false {
       return String::new();
@@ -207,8 +201,7 @@ impl HashIds {
     self.encode(&numbers)
   }
 
-  fn decode_hex(&self, hash: String) -> String {
-    use std::fmt;
+  pub fn decode_hex(&self, hash: String) -> String {
     let mut ret = String::new();
     let numbers = self.decode(hash);
     for number in numbers.iter() {
@@ -219,7 +212,7 @@ impl HashIds {
     ret
   }
 
-  fn encode(&self, numbers: &Vec<i64>) -> String {
+  pub fn encode(&self, numbers: &Vec<i64>) -> String {
     if numbers.len() == 0 {
       return "".to_string();
     }
@@ -233,7 +226,7 @@ impl HashIds {
     self._encode(numbers)
   }
 
-  fn decode(&self, hash: String) -> Vec<i64> {  
+  pub fn decode(&self, hash: String) -> Vec<i64> {  
     let ret : Vec<i64> = Vec::new();
     if hash.len() == 0 {
       return ret;
@@ -422,71 +415,4 @@ impl HashIds {
 
     ret_str
   }
-}
-
-fn main() {
-//  let ids = HashIds::new("1234".to_string(), 10, DEFAULT_ALPHABET.to_string());
-  let ids = HashIds::new_with_salt("this is my salt".to_string());
-  println!("{}", ids.alphabet);
-  println!("{}", ids.separators);
-  let numbers: Vec<i64> = vec![12345];
-  let encode = ids.encrypt(&numbers);
-  println!("{}", encode);
-
-  let longs = ids.decrypt(encode.clone());
-  for s in longs.iter() {
-    println!("longs: {}", s);
-  }
-
-  let ids3 = HashIds::new_with_salt("this is my pepper".to_string());
-  let longs2 = ids3.decrypt(encode.clone());
-  for s in longs2.iter() {
-    println!("bad longs: {}", s);
-  }
-
-  let ids2 = HashIds::new_with_salt("this is my salt".to_string());
-  let i = ids2.encode_hex("1234567890abcdef".to_string());
-  println!("{}", i);
-
-  let o = ids2.decode_hex(i);
-  println!("{}", o);
-
-  let ids3 = HashIds::new_with_salt("this is my salt".to_string());
-  let numbers3: Vec<i64> = vec![683, 94108, 123, 5];
-  let encode3 = ids3.encrypt(&numbers3);
-  println!("ids3 = {}", encode3);
-
-  let ids4 = HashIds::new_with_salt("this is my salt".to_string());
-  let numbers4: Vec<i64> = vec![5, 5, 5, 5];
-  let encode4 = ids4.encrypt(&numbers4);
-  println!("ids4 = {}", encode4);
-
-  let ids5 = HashIds::new_with_salt("this is my salt".to_string());
-  let numbers5: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  let encode5 = ids5.encrypt(&numbers5);
-  println!("ids5 = {}", encode5);
-
-  let ids6 = HashIds::new_with_salt("this is my salt".to_string());
-  let numbers_1: Vec<i64> = vec![1];
-  let encode_1 = ids6.encrypt(&numbers_1);
-  println!("encode_1 = {}", encode_1);
-  let numbers_2: Vec<i64> = vec![2];
-  let encode_2 = ids6.encrypt(&numbers_2);
-  println!("encode_2 = {}", encode_2);
-  let numbers_3: Vec<i64> = vec![3];
-  let encode_3 = ids6.encrypt(&numbers_3);
-  println!("encode_3 = {}", encode_3);
-  let numbers_4: Vec<i64> = vec![4];
-  let encode_4 = ids6.encrypt(&numbers_4);
-  println!("encode_4 = {}", encode_4);
-  let numbers_5: Vec<i64> = vec![5];
-  let encode_5 = ids6.encrypt(&numbers_5);
-  println!("encode_5 = {}", encode_5);
-
-  let ids7 = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
-  let numbers7 : Vec<i64> = vec![1];
-  let encode7 = ids7.encrypt(&numbers_1);
-  println!("ids7 = {}", encode7);
-
-  println!("ids7 decrypt = {}", ids7.decrypt(encode7)[0]);
 }

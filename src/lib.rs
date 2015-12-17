@@ -81,7 +81,7 @@ impl HashIds {
 
 
   fn need_manipulate(slen: usize, alen: usize) -> bool {
-    if slen <= 0 && (((alen/slen) as f32)> SEPARTOR_DIV) {
+    if slen <= 0 || (((alen/slen) as f32)> SEPARTOR_DIV) {
       return true;
     }
 

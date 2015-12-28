@@ -1,5 +1,3 @@
-#![allow(unstable)]
-
 extern crate hashids;
 
 use hashids::HashIds;
@@ -9,7 +7,7 @@ fn it_works_1() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -27,7 +25,7 @@ fn it_works_2() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -39,7 +37,7 @@ fn it_works_2() {
   let ids_some2 = HashIds::new_with_salt("this is my pepper".to_string());
   let ids2 = match ids_some2 {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -55,7 +53,7 @@ fn it_works_3() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -72,7 +70,7 @@ fn it_works_4() {
   let ids_some = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -89,7 +87,7 @@ fn it_works_5() {
   let ids_some = HashIds::new("this is my salt".to_string(), 0, "0123456789abcdef".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -106,7 +104,7 @@ fn it_works_6() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -123,7 +121,7 @@ fn it_works_7() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }
@@ -140,7 +138,7 @@ fn it_works_8() {
   let ids_some = HashIds::new_with_salt("this is my salt".to_string());
   let ids = match ids_some {
     Ok(v) => { v }
-    Err(e) => {
+    Err(_) => {
       println!("error");
       return;
     }

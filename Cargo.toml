@@ -12,3 +12,6 @@ include = [
   "**/*.rs",
   "Cargo.toml",
 ]
+
+[dependencies]
+regex = "0.1"

@@ -1,12 +1,9 @@
 #![crate_name = "hashids"]
-#![allow(unstable)]
 
 extern crate regex;
 
-use std::num::Float;
 use std::collections::HashMap;
 use regex::Regex;
-use std::num;
 
 const DEFAULT_ALPHABET: &'static str =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
@@ -44,26 +41,27 @@ impl HashIds {
 
       if seps_len > shuffled_separators.len() {
         let diff = seps_len - shuffled_separators.len();
-        shuffled_separators.push_str(t_alphabet.slice(0,diff));
-        t_alphabet = t_alphabet.slice_from(diff).to_string();
+
+        shuffled_separators.push_str(&t_alphabet[..diff]);
+        t_alphabet = t_alphabet[diff..].to_string();
       } else {
-        shuffled_separators = shuffled_separators.slice(0, seps_len).to_string();
+        shuffled_separators = shuffled_separators[..seps_len].to_string();
       }
     }
 
     let mut shuffled_alphabet = HashIds::hashids_shuffle(t_alphabet.clone(), salt.clone());
     let guard_count = (shuffled_alphabet.len() as f32 / GUARD_DIV as f32).ceil() as usize;
 
-    let mut t_guards;
+    let t_guards;
 
     if shuffled_alphabet.len() < 3 {
-      t_guards = shuffled_separators.slice(0, guard_count).to_string();
-      shuffled_separators = shuffled_separators.slice_from(guard_count).to_string(); 
+      t_guards = shuffled_separators[..guard_count].to_string();
+      shuffled_separators = shuffled_separators[guard_count..].to_string();
     } else {
-      t_guards = shuffled_alphabet.slice(0, guard_count).to_string();
-      shuffled_alphabet = shuffled_alphabet.slice_from(guard_count).to_string(); 
+      t_guards = shuffled_alphabet[..guard_count].to_string();
+      shuffled_alphabet = shuffled_alphabet[guard_count..].to_string();
     }
-    
+
     Ok(HashIds {
       salt: salt,
       min_hash_length: min_length,
@@ -83,7 +81,7 @@ impl HashIds {
 
 
   fn need_manipulate(slen: usize, alen: usize) -> bool {
-    if slen <= 0 && (((alen/slen) as f32)> SEPARTOR_DIV) {
+    if slen <= 0 || (((alen/slen) as f32)> SEPARTOR_DIV) {
       return true;
     }
 
@@ -111,7 +109,7 @@ impl HashIds {
     let arr = salt.as_bytes();
     let len = alphabet.len();
     let mut bytes = alphabet.into_bytes();
-    let mut shuffle = bytes.as_mut_slice();
+    let mut shuffle = &mut bytes[..];
 
     let mut i: usize = len-1;
     let mut v: usize = 0;
@@ -130,7 +128,7 @@ impl HashIds {
     }
 
     let mut shuffled_alphabet = String::with_capacity(len);
-    for i in (0..len) {
+    for i in 0..len {
       shuffled_alphabet.push(shuffle[i] as char);
     }
 
@@ -183,17 +181,17 @@ impl HashIds {
 
   pub fn encode_hex(&self, hex: String) -> String {
     let regex1 = Regex::new(r"^[0-9a-fA-F]+$").unwrap();
-    if regex1.is_match(hex.as_slice()) == false {
+    if regex1.is_match(&hex.to_string()) == false {
       return String::new();
     }
 
     let mut numbers: Vec<i64> = Vec::new();
     let regex2 = Regex::new(r"[\w\W]{1,12}").unwrap();
-    for matcher in regex2.find_iter(hex.as_slice()) {
+    for matcher in regex2.find_iter(&hex.to_string()) {
       let mut num = String::new();
       num.push('1');
-      num.push_str(hex.slice(matcher.0, matcher.1));
-      let v: i64 = num::from_str_radix(num.as_slice(), 16).unwrap();
+      num.push_str(&hex[matcher.0..matcher.1]);
+      let v: i64 = i64::from_str_radix(&num.to_string(), 16).unwrap();
       numbers.push(v);
     }
     
@@ -205,7 +203,7 @@ impl HashIds {
     let numbers = self.decode(hash);
     for number in numbers.iter() {
       let r = format!("{:x}", number);
-      ret.push_str(r.slice_from(1));
+      ret.push_str(&r[1..]);
     }
 
     ret
@@ -225,7 +223,7 @@ impl HashIds {
     self._encode(numbers)
   }
 
-  pub fn decode(&self, hash: String) -> Vec<i64> {  
+  pub fn decode(&self, hash: String) -> Vec<i64> {
     let ret : Vec<i64> = Vec::new();
     if hash.len() == 0 {
       return ret;
@@ -239,48 +237,47 @@ impl HashIds {
 
     let mut regexp = String::new();
     regexp.push('[');
-    regexp.push_str(self.guards.as_slice());
+    regexp.push_str(&self.guards[..]);
     regexp.push(']');
 
-    let re = Regex::new(regexp.as_slice()).unwrap();
-    let t_hash = re.replace_all(hash.as_slice(), " ");
+    let re = Regex::new(&regexp[..]).unwrap();
+    let t_hash = re.replace_all(&hash[..], " ");
 
-    let mut split: Vec<&str> = t_hash.as_slice().split_str(" ").collect();
+    let split1: Vec<&str> = t_hash[..].split_whitespace().collect();
     let mut i = 0;
 
-    let len = split.len();
+    let len = split1.len();
     if len == 3 || len == 2 {
       i = 1;
     }
-    let mut hash_breakdown = split[i].to_string();
+    let mut hash_breakdown = split1[i].to_string();
 
-    let lottery = hash_breakdown.slice(0,1).to_string();
+    let lottery = hash_breakdown[0..1].to_string();
+    hash_breakdown = hash_breakdown[1..].to_string();
 
-    hash_breakdown = hash_breakdown.slice_from(1).to_string();
-    
     let mut regexp2 = String::new();
     regexp2.push('[');
-    regexp2.push_str(self.separators.as_slice());
+    regexp2.push_str(&self.separators[..]);
     regexp2.push(']');
 
-    let re2 = Regex::new(regexp2.as_slice()).unwrap();
-    hash_breakdown  = re2.replace_all(hash_breakdown.as_slice(), " ");
+    let re2 = Regex::new(&regexp2[..]).unwrap();
+    hash_breakdown = re2.replace_all(&hash_breakdown[..], " ");
 
-    split = hash_breakdown.as_slice().split_str(" ").collect();
+    let split2: Vec<&str> = hash_breakdown[..].split_whitespace().collect();
 
     let mut alphabet = self.alphabet.clone();
 
     let mut ret: Vec<i64> = Vec::new();
 
-    for s in split.iter() {
+    for s in split2 {
       let sub_hash = s.to_string();
       let mut buffer = String::new();
-      buffer.push_str(lottery.as_slice());
-      buffer.push_str(self.salt.as_slice());
-      buffer.push_str(alphabet.clone().as_slice());
+      buffer.push_str(&lottery[..]);
+      buffer.push_str(&self.salt[..]);
+      buffer.push_str(&alphabet.clone()[..]);
 
       let alpha_len = alphabet.len();
-      alphabet = HashIds::hashids_shuffle(alphabet, buffer.slice(0, alpha_len).to_string());
+      alphabet = HashIds::hashids_shuffle(alphabet, buffer[0..alpha_len].to_string());
       ret.push(HashIds::unhash(sub_hash, alphabet.clone()));
     }
 
@@ -306,8 +303,6 @@ impl HashIds {
   }
 
   fn unhash(input: String, alphabet: String) -> i64 {
-    use std::num::Int;
-
     let mut number: i64 = 0;
     let input_slice = input.as_bytes();
     let alpha_slice = alphabet.as_bytes();
@@ -321,7 +316,7 @@ impl HashIds {
 
       let v = input_slice[i] as usize;
       let pos = HashIds::index_of(alpha_slice, v as u8);
-      let pow_size = (len - i - 1) as usize;
+      let pow_size = (len - i - 1) as u32;
       number += (pos * alpha_len.pow(pow_size)) as i64;
       i += 1;
     }
@@ -336,8 +331,8 @@ impl HashIds {
 
     loop {
       let idx = (t_in % len) as usize;
-      let mut t = alphabet.slice(idx, idx+1).to_string();
-      t.push_str(hash.as_slice());
+      let mut t = alphabet[idx..idx+1].to_string();
+      t.push_str(&hash[..]);
       hash = t;
       t_in /= len;
 
@@ -358,7 +353,7 @@ impl HashIds {
     }
 
     let idx = (number_hash_int % (self.alphabet.len() as i64)) as usize;
-    let ret = self.alphabet.slice(idx, idx+1).to_string();
+    let ret = self.alphabet[idx..idx+1].to_string();
     let mut ret_str = ret.clone();
 
     let mut t_alphabet = self.alphabet.clone();
@@ -367,14 +362,14 @@ impl HashIds {
     let last_len = count - 100;
     for number in numbers.iter() {
       let mut buffer = ret.clone();
-      buffer.push_str(self.salt.as_slice());
-      buffer.push_str(t_alphabet.as_slice());
-      t_alphabet = HashIds::hashids_shuffle(t_alphabet.clone(), buffer.slice(0, t_alphabet.len()).to_string());
+      buffer.push_str(&self.salt[..]);
+      buffer.push_str(&t_alphabet[..]);
+      t_alphabet = HashIds::hashids_shuffle(t_alphabet.clone(), buffer[0..t_alphabet.len()].to_string());
       let last = HashIds::hash(*number, t_alphabet.clone());
 
-      ret_str.push_str(last.as_slice());
-      
-      if (i + 1) < last_len { 
+      ret_str.push_str(&last[..]);
+
+      if (i + 1) < last_len {
         let mut v = *number % (last.as_bytes()[0] as i64 + i);
         v = v % len;
         ret_str.push(self.separators.as_bytes()[v as usize] as char);
@@ -384,15 +379,14 @@ impl HashIds {
 
     if ret_str.len() < self.min_hash_length {
       let guard_idx = (number_hash_int + ret_str.clone().into_bytes()[0] as i64) as usize % self.guards.len();
-      let guard = self.guards.slice(guard_idx, guard_idx+1).to_string();
+      let guard = self.guards[guard_idx..guard_idx+1].to_string();
       let mut t = guard.clone();
-      t.push_str(ret_str.as_slice());
+      t.push_str(&ret_str[..]);
       ret_str = t;
 
       if ret_str.len() < self.min_hash_length {
         let guard_idx = (number_hash_int + ret_str.clone().into_bytes()[2] as i64) as usize % self.guards.len();
-        let guard = self.guards.slice(guard_idx, guard_idx+1);
-        ret_str.push_str(guard);
+        ret_str.push_str(&self.guards[guard_idx..guard_idx+1]);
       }
     }
 
@@ -400,15 +394,15 @@ impl HashIds {
     while ret_str.len() < self.min_hash_length {
       t_alphabet = HashIds::hashids_shuffle(t_alphabet.clone(), t_alphabet.clone());
       let mut t_ret = "".to_string();
-      t_ret.push_str(t_alphabet.slice_from(half_len));
-      t_ret.push_str(ret_str.as_slice());
-      t_ret.push_str(t_alphabet.slice(0, half_len));
+      t_ret.push_str(&t_alphabet[half_len..]);
+      t_ret.push_str(&ret_str[..]);
+      t_ret.push_str(&t_alphabet[0..half_len]);
       ret_str = t_ret;
 
       let excess = ret_str.len() as i64 - self.min_hash_length as i64;
       if excess > 0 {
         let start_pos = (excess as i64 / 2) as usize;
-        ret_str = ret_str.slice(start_pos, start_pos + self.min_hash_length).to_string();
+        ret_str = ret_str[start_pos..start_pos + self.min_hash_length].to_string();
       }
     }
 

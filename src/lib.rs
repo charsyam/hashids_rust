@@ -1,12 +1,28 @@
 #![crate_name = "hashids"]
 
+use std::fmt;
+use std::error::Error;
+
 const DEFAULT_ALPHABET: &'static str =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
 const SEPARATOR_DIV: f32 = 3.5;
 const GUARD_DIV: f32 = 12.0;
 const MIN_ALPHABET_LENGTH: usize = 16;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum HashIdsError { InvalidAlphabetLength }
+
+impl fmt::Display for HashIdsError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.description())
+  }
+}
+
+impl Error for HashIdsError {
+  fn description(&self) -> &str {
+    "Invalid Alphabet Length"
+  }
+}
 
 pub struct HashIds {
   salt: Box<str>,

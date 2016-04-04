@@ -4,14 +4,7 @@ use hashids::HashIds;
 
 #[test]
 fn it_works_1() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers: Vec<u64> = vec![12345];
   let encode = ids.encode(&numbers);
@@ -23,40 +16,19 @@ fn it_works_1() {
 
 #[test]
 fn it_works_2() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers: Vec<u64> = vec![12345];
   let encode = ids.encode(&numbers);
 
-  let ids_some2 = HashIds::new(String::from("this is my pepper"));
-  let ids2 = match ids_some2 {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids2 = HashIds::new(String::from("this is my pepper")).unwrap();
 
   assert!(ids2.decode(&encode).is_none());
 }
 
 #[test]
 fn it_works_3() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers: Vec<u64> = vec![683, 94108, 123, 5];
   let encode = ids.encode(&numbers);
@@ -66,14 +38,7 @@ fn it_works_3() {
 
 #[test]
 fn it_works_4() {
-  let ids_some = HashIds::with_min_length(String::from("this is my salt"), 8);
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::with_min_length(String::from("this is my salt"), 8).unwrap();
 
   let numbers: Vec<u64> = vec![1];
   let encode = ids.encode(&numbers);
@@ -83,14 +48,7 @@ fn it_works_4() {
 
 #[test]
 fn it_works_5() {
-  let ids_some = HashIds::with_min_length_and_alphabet(String::from("this is my salt"), 0, "0123456789abcdef");
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::with_min_length_and_alphabet(String::from("this is my salt"), 0, "0123456789abcdef").unwrap();
 
   let numbers: Vec<u64> = vec![1234567];
   let encode = ids.encode(&numbers);
@@ -100,14 +58,7 @@ fn it_works_5() {
 
 #[test]
 fn it_works_6() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers: Vec<u64> = vec![5, 5, 5, 5];
   let encode = ids.encode(&numbers);
@@ -117,14 +68,7 @@ fn it_works_6() {
 
 #[test]
 fn it_works_7() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers: Vec<u64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   let encode = ids.encode(&numbers);
@@ -134,14 +78,7 @@ fn it_works_7() {
 
 #[test]
 fn it_works_8() {
-  let ids_some = HashIds::new(String::from("this is my salt"));
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::new(String::from("this is my salt")).unwrap();
 
   let numbers_1: Vec<u64> = vec![1];
   let encode_1 = ids.encode(&numbers_1);

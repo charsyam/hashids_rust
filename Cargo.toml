@@ -14,4 +14,3 @@ include = [
 ]
 
 [dependencies]
-regex = "0.1"

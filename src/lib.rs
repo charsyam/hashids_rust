@@ -137,7 +137,8 @@ impl HashIds {
         let mut buffer = String::new();
         for number in numbers {
           write!(buffer, "{:x}", number).unwrap();
-          result.push_str(&buffer[1..])
+          result.push_str(&buffer[1..]);
+          buffer.clear();
         }
         Some(result)
       },

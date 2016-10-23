@@ -36,7 +36,7 @@ impl Debug for HashIds {
 
 impl Debug for HashIdsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-      writeln!(f, "InvalidAlphabetLength")
+         writeln!(f, "InvalidAlphabetLength")
     }
 }
 

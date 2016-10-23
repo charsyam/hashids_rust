@@ -267,6 +267,20 @@ let numbers_5: Vec<i64> = vec![5];
 let encode_5 = ids.encode(&numbers_5);
 ```
 
+### Simple usage
+```rust
+extern crate hashids;
+use hashids::HashIds;
+
+fn main() {
+    let ids = HashIds::new_with_salt("this is my salt".to_string()).unwrap();
+    let numbers: Vec<i64> = vec!(21312321, 34);
+    let encode = ids.encode(&numbers);
+
+    println!("{}", encode);
+}
+```
+
 ## Bad hashes
 
 I wrote this class with the intent of placing these hashes in visible places - like the URL. If I create a unique hash for each user, it would be unfortunate if the hash ended up accidentally being a bad word. Imagine auto-creating a URL with hash for your user that looks like this - `http://example.com/user/a**hole`

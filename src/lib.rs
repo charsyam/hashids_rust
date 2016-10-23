@@ -24,9 +24,12 @@ pub struct HashIds {
 
 impl Debug for HashIds {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "salt: {}\n{}",
-                 self.salt,
-                 self.alphabet,
+        writeln!(f, "salt: {}\nalphabet: {}\nseparators: {}\nmin_hash_length: {}\nguards: {}",
+            self.salt,
+            self.alphabet,
+            self.separators,
+            self.min_hash_length,
+            self.guards
         )
     }
 }

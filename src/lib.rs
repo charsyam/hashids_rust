@@ -1,29 +1,36 @@
-#![crate_name = "hashids"]
-
 use std::fmt;
-use std::error::Error;
+use std::error::Error as StdError;
 
-const DEFAULT_ALPHABET: &'static str =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+use std::collections::HashSet;
+
+const DEFAULT_ALPHABET: &'static str =  "abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890";
 const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
 const SEPARATOR_DIV: f32 = 3.5;
 const GUARD_DIV: f32 = 12.0;
 const MIN_ALPHABET_LENGTH: usize = 16;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum HashIdsError { InvalidAlphabetLength }
+pub enum Error {
+  ShortAlphabet,
+  SpaceInAlphabet,
+}
 
-impl fmt::Display for HashIdsError {
+impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.description())
   }
 }
 
-impl Error for HashIdsError {
+impl StdError for Error {
   fn description(&self) -> &str {
-    "Invalid Alphabet Length"
+    match *self {
+      Error::ShortAlphabet => "Invalid Alphabet Length",
+      Error::SpaceInAlphabet => "Space character found in alphabet",
+    }
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HashIds {
   salt: Box<str>,
   alphabet: Box<[char]>,
@@ -32,82 +39,116 @@ pub struct HashIds {
   guards: Box<[char]>,
 }
 
-impl HashIds {
-  pub fn with_min_length_and_alphabet(salt: String, min_length: usize, alphabet: &str) -> Result<HashIds, HashIdsError>
-  {
-    let mut alphabet = {
-      let mut unique_alphabet = Vec::with_capacity(alphabet.len());
-      for ch in alphabet.chars() {
-        if !unique_alphabet.contains(&ch) {
-          unique_alphabet.push(ch);
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HashIdsBuilder {
+  salt: Box<str>,
+  min_length: usize,
+  alphabet: Option<Vec<char>>,
+}
+
+impl HashIdsBuilder {
+  pub fn new() -> Self {
+    HashIdsBuilder::default()
+  }
+
+  pub fn salt(mut self, salt: String) -> Self {
+    self.salt = salt.into_boxed_str();
+    self
+  }
+
+  pub fn min_length(mut self, min_length: usize) -> Self {
+    self.min_length = min_length;
+    self
+  }
+
+  pub fn alphabet(mut self, alphabet: &str) -> Self {
+    self.alphabet = Some(alphabet.chars().collect());
+    self
+  }
+
+  pub fn build(self) -> Result<HashIds, Error> {
+    let HashIdsBuilder {
+      salt,
+      min_length,
+      alphabet,
+    } = self;
+    let custom_alphabet = alphabet.is_some();
+    let (mut alphabet, mut separators) = match alphabet {
+      Some(mut alphabet) => {
+        let mut alphabet_set = HashSet::with_capacity(alphabet.len());
+        let mut separators = Vec::with_capacity(DEFAULT_SEPARATORS.len());
+        let mut contains_space = false;
+        alphabet.retain(|&ch| {
+          if ch == ' ' {
+            contains_space = true;
+          }
+          if alphabet_set.insert(ch) {
+            if DEFAULT_SEPARATORS.contains(ch) {
+              false
+            } else {
+              true
+            }
+          } else {
+            false
+          }
+        });
+        if contains_space {
+          return Err(Error::SpaceInAlphabet);
         }
+        for ch in DEFAULT_SEPARATORS.chars() {
+          if alphabet_set.contains(&ch) {
+            separators.push(ch);
+          }
+        }
+        if alphabet.len() + separators.len() < MIN_ALPHABET_LENGTH {
+          return Err(Error::ShortAlphabet);
+        }
+        (alphabet, separators)
       }
-      unique_alphabet
+      None => {
+        (DEFAULT_ALPHABET.chars().collect(), DEFAULT_SEPARATORS.chars().collect())
+      }
     };
-
-    if alphabet.len() < MIN_ALPHABET_LENGTH {
-      return Err(HashIdsError::InvalidAlphabetLength);
-    }
-
-    let mut separators: Vec<char> = DEFAULT_SEPARATORS.chars().collect();
-    for i in (0..separators.len()).rev() {
-      match alphabet.iter().position(|&ch| ch == separators[i]) {
-        Some(idx) => {
-          alphabet.remove(idx);
-        },
-        None => {
-          separators.remove(i);
-        }
+    
+    shuffle(&mut separators, salt.as_bytes());
+    if custom_alphabet {
+      let expected_sep_len = (alphabet.len() as f32 / SEPARATOR_DIV).ceil() as usize;
+      if separators.len() < expected_sep_len {
+        let diff = expected_sep_len - separators.len();
+        // Steal the first `diff` chars from alphabet, and add to separators
+        separators.extend(alphabet.drain(..diff));
       }
     }
-
-    HashIds::shuffle(&mut separators, &salt);
-
-
-    if separators.is_empty() || (alphabet.len() as f32 / separators.len() as f32) > SEPARATOR_DIV {
-      let mut seps_len = ((alphabet.len() as f32) / SEPARATOR_DIV).ceil() as usize;
-      if seps_len == 1 {
-        seps_len += 1;
-      }
-
-      if seps_len > separators.len() {
-        let diff = seps_len - separators.len();
-
-        separators.extend_from_slice(&alphabet[..diff]);
-        alphabet.drain(..diff);
-      } else {
-        separators.truncate(seps_len);
-      }
-    }
-
-    HashIds::shuffle(&mut alphabet, &salt);
+    shuffle(&mut alphabet, salt.as_bytes());
     let guard_count = (alphabet.len() as f32 / GUARD_DIV).ceil() as usize;
-
-    let guards;
-
-    if alphabet.len() < 3 {
-      guards = separators[..guard_count].to_vec();
-      separators.drain(..guard_count);
-    } else {
-      guards = alphabet[..guard_count].to_vec();
-      alphabet.drain(..guard_count);
+    let guards: Vec<char>;
+    {
+      let guard_source = if alphabet.len() < 3 {
+        &mut separators
+      } else {
+        &mut alphabet
+      };
+      guards = guard_source.drain(..guard_count).collect();
     }
-
     Ok(HashIds {
-      salt: salt.into_boxed_str(),
-      min_hash_length: min_length,
-      guards: guards.into_boxed_slice(),
-      separators: separators.into_boxed_slice(),
+      salt: salt,
       alphabet: alphabet.into_boxed_slice(),
+      separators: separators.into_boxed_slice(),
+      guards: guards.into_boxed_slice(),
+      min_hash_length: min_length,
     })
   }
+}
 
-  pub fn with_min_length(salt: String, min_hash_length: usize) -> Result<HashIds, HashIdsError> {
-    HashIds::with_min_length_and_alphabet(salt, min_hash_length, DEFAULT_ALPHABET)
+impl HashIds {
+  pub fn new() -> Self {
+    // Can only fail with custom alphabet
+    HashIdsBuilder::new().build().unwrap()
   }
 
-  pub fn new(salt: String) -> Result<HashIds, HashIdsError> {
-    HashIds::with_min_length(salt, 0)
+  pub fn with_salt(salt: String) -> Self {
+    // Can only fail with custom alphabet
+    HashIdsBuilder::new().salt(salt).build().unwrap()
   }
 
   pub fn encode_hex(&self, hex: &str) -> Option<String> {
@@ -180,7 +221,7 @@ impl HashIds {
         let extra_needed = alphabet.len() - buffer.len();
         buffer.extend(alphabet[..extra_needed].iter());
       }
-      HashIds::shuffle(&mut alphabet, &buffer);
+      shuffle(&mut alphabet, buffer.as_bytes());
 
       if let Some(number) = HashIds::unhash(sub_hash, &alphabet) {
         result.push(number);
@@ -211,25 +252,6 @@ impl HashIds {
     Some(number)
   }
 
-  fn hash(mut input: u64, alphabet: &[char]) -> Vec<char> {
-    let len = alphabet.len() as u64;
-    let mut result = Vec::new();
-
-    loop {
-      let idx = (input % len) as usize;
-      let ch = alphabet[idx];
-      result.push(ch);
-      input /= len;
-
-      if input == 0 {
-        break;
-      }
-    }
-
-    result.reverse();
-    result
-  }
-
   pub fn encode(&self, numbers: &[u64]) -> String {
     if numbers.len() == 0 {
       panic!("Unable to encode an empty slice of numbers");
@@ -239,9 +261,9 @@ impl HashIds {
   }
 
   fn _encode(&self, numbers: &[u64]) -> String {
-    let mut number_hash_int = 0;
+    let mut number_hash_int: u64 = 0;
     for (i, &number) in numbers.iter().enumerate() {
-      number_hash_int += number % (i as u64 + 100);
+      number_hash_int = number_hash_int.wrapping_add(number % (i as u64 + 100));
     }
 
     let lottery_idx = (number_hash_int % self.alphabet.len() as u64) as usize;
@@ -253,25 +275,21 @@ impl HashIds {
     let mut buffer = String::with_capacity(alphabet.len());
     buffer.push(lottery);
     buffer.push_str(&self.salt);
-    if buffer.len() > alphabet.len() {
-      buffer.truncate(alphabet.len());
-    }
     let const_buffer_len = buffer.len();
     for (i, &number) in numbers.iter().enumerate() {
       buffer.truncate(const_buffer_len);
       // Don't bother adding anything from alphabet if buffer is long enough already
-      if buffer.len() < alphabet.len() {
+      if const_buffer_len < alphabet.len() {
           let extra_needed = alphabet.len() - buffer.len();
-          buffer.extend(alphabet[..extra_needed].iter());
+          buffer.extend(alphabet[..extra_needed].iter().cloned());
       }
-      HashIds::shuffle(&mut alphabet, &buffer);
-      let last = HashIds::hash(number, &alphabet);
-
-      result.extend_from_slice(&last);
+      shuffle(&mut alphabet, buffer.as_bytes());
+      let last_start = result.len();
+      add_num_with_alphabet(&mut result, number, &alphabet);
 
       if (i + 1) < numbers.len() {
-        let mut sep_idx = (number % (last[0] as u64 + i as u64)) as usize;
-        sep_idx %= self.separators.len();
+        let sep_idx = number % (result[last_start] as u64 + i as u64);
+        let sep_idx =  (sep_idx % self.separators.len() as u64) as usize;
         result.push(self.separators[sep_idx]);
       }
     }
@@ -291,44 +309,56 @@ impl HashIds {
     let half_len = alphabet.len() / 2;
     while result.len() < self.min_hash_length {
       buffer.clear();
-      buffer.extend(alphabet.iter());
-      HashIds::shuffle(&mut alphabet, &buffer);
+      buffer.extend(alphabet.iter().cloned());
+      shuffle(&mut alphabet, buffer.as_bytes());
 
-      result = alphabet[half_len..].iter().cloned().chain(result.into_iter()).chain(alphabet[..half_len].iter().cloned()).collect();
-
-      let excess = result.len() - self.min_hash_length;
-      if excess > 0 {
-        let start_pos = excess / 2;
-        result.truncate(start_pos + self.min_hash_length);
-        result.drain(..start_pos);
-      }
+      let excess = (result.len() + alphabet.len()).saturating_sub(self.min_hash_length);
+      let start_pos = excess / 2;
+      result.splice(0..0, alphabet[half_len + start_pos..].iter().cloned());
+      result.extend_from_slice(&alphabet[..half_len - (excess - start_pos)]);
     }
 
     result.into_iter().collect()
   }
+}
 
-  fn shuffle(alphabet: &mut [char], salt: &str) {
-    let salt = salt.as_bytes();
-    if salt.len() <= 0 {
-      return;
-    }
+fn shuffle(alphabet: &mut [char], salt: &[u8]) {
+  if salt.len() <= 0 {
+    return;
+  }
 
-    let len = alphabet.len();
+  let len = alphabet.len();
 
-    let mut i: usize = len-1;
-    let mut v: usize = 0;
-    let mut p: usize = 0;
+  let mut v: usize = 0;
+  let mut p: usize = 0;
 
-    while i > 0 {
-      v %= salt.len();
-      let t = salt[v] as usize;
-      p += t;
-      let j = (t + v + p) % i;
+  for i in (1..len).rev() {
+    v %= salt.len();
+    let t = salt[v] as usize;
+    p += t;
+    let j = (t.wrapping_add(v).wrapping_add(p)) % i;
 
-      alphabet.swap(i,j);
+    alphabet.swap(i, j);
 
-      i=i-1;
-      v=v+1; 
-    }
+    v += 1;
   }
 }
+
+fn add_num_with_alphabet(hash: &mut Vec<char>, mut input: u64, alphabet: &[char]) {
+  let new_start = hash.len();
+  let len = alphabet.len() as u64;
+
+  loop {
+    let idx = (input % len) as usize;
+    let ch = alphabet[idx];
+    hash.push(ch);
+    input /= len;
+
+    if input == 0 {
+      break;
+    }
+  }
+
+  hash[new_start..].reverse();
+}
+

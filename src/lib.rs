@@ -233,13 +233,9 @@ impl HashIds {
 
   pub fn encode(&self, numbers: &[u64]) -> String {
     if numbers.len() == 0 {
-      panic!("Unable to encode an empty slice of numbers");
+      return String::new();
     }
 
-    self._encode(numbers)
-  }
-
-  fn _encode(&self, numbers: &[u64]) -> String {
     let mut number_hash_int: u64 = 0;
     for (i, &number) in numbers.iter().enumerate() {
       number_hash_int = number_hash_int.wrapping_add(number % (i as u64 + 100));

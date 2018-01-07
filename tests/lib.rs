@@ -84,9 +84,6 @@ fn bad() {
 
 quickcheck! {
   fn equals_javascript(salt: Vec<u8>, alphabet: Vec<u8>, min_len: usize, nums: Vec<u64>) -> TestResult {
-    if nums.is_empty() {
-      return TestResult::discard();
-    }
     // make alphabet ascii
     let mut alphabet = alphabet;
     for ch in alphabet.iter_mut() {

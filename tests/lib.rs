@@ -10,11 +10,10 @@ use std::process::Command;
 
 #[test]
 fn it_works_1() {
-  let ids = HashIds::with_salt(String::from("this is my salt"));
+  let ids = HashIds::with_salt("this is my salt");
 
   let numbers: Vec<u64> = vec![12345];
   let encode = ids.encode(&numbers);
-  println!("{}", encode);
   let longs = ids.decode(&encode).unwrap();
 
   assert_eq!(numbers, longs);
@@ -59,7 +58,7 @@ fn run_javascript(salt: &str, alphabet: &str, min_len: usize, nums: &[u64]) -> R
 fn default_equal_explicit() {
   let ids_def = HashIds::new();
   let ids_exp = HashIdsBuilder::new()
-    .salt(String::new())
+    .salt("")
     .alphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
     .build()
     .unwrap();
@@ -70,39 +69,63 @@ fn default_equal_explicit() {
 
 #[test]
 fn bad() {
+  let alphabet = "\u{10}\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\t\n\u{b}\u{c}\r\u{e}\u{80}";
   let ids = HashIdsBuilder::new()
-    .min_length(3)
+    .alphabet(alphabet)
     .build()
     .unwrap();
-  let data = [0];
+  let data = [55];
   let encoded = ids.encode(&data);
-  assert_eq!(encoded, run_javascript("", "", 3, &data).unwrap());
+  assert_eq!(encoded, run_javascript("", alphabet, 0, &data).unwrap());
   let decoded = ids.decode(&encoded).unwrap();
   assert_eq!(decoded, data);
 }
 
+quickcheck! {
+  fn encoded_decodable(salt: String, alphabet: String, min_len: usize, nums: Vec<u64>) -> TestResult {
+    let mut builder = HashIdsBuilder::new().min_length(min_len);
+    if ! salt.is_empty() {
+      builder = builder.salt(&salt);
+    }
+    if ! alphabet.is_empty() {
+      builder = builder.alphabet(&alphabet)
+    }
+
+    let ids = builder.build();
+
+    match ids {
+      Ok(ids) => {
+        let encoded = ids.encode(&nums);
+        let decoded = ids.decode(&encoded).unwrap();
+        assert_eq!(decoded, nums);
+      }
+      Err(_) => {
+        return TestResult::discard();
+      }
+    }
+
+    TestResult::passed()
+  }
+}
 
 quickcheck! {
-  fn equals_javascript(salt: Vec<u8>, alphabet: Vec<u8>, min_len: usize, nums: Vec<u64>) -> TestResult {
+  fn equals_javascript(salt: String, alphabet: Vec<u8>, min_len: usize, nums: Vec<u64>) -> TestResult {
     // make alphabet ascii
     let mut alphabet = alphabet;
     for ch in alphabet.iter_mut() {
       *ch = *ch & 0x7F;
     }
     let alphabet = String::from_utf8(alphabet).unwrap();
-    // make salt ascii
-    let mut salt = salt;
-    for ch in salt.iter_mut() {
-      *ch = *ch & 0x7F;
-    }
-    let salt = String::from_utf8(salt).unwrap();
     if salt.contains('\0') || alphabet.contains('\0') {
+      return TestResult::discard();
+    }
+    if salt.chars().any(|ch| ch.len_utf16() > 1) {
       return TestResult::discard();
     }
     let js_result = run_javascript(&salt, &alphabet, min_len, &nums);
     let mut builder = HashIdsBuilder::new().min_length(min_len);
     if ! salt.is_empty() {
-      builder = builder.salt(salt);
+      builder = builder.salt(&salt);
     }
     if ! alphabet.is_empty() {
       builder = builder.alphabet(&alphabet)

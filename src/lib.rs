@@ -1,4 +1,5 @@
 use std::fmt;
+use std::cmp;
 use std::error::Error as StdError;
 
 use std::collections::HashSet;
@@ -53,7 +54,7 @@ impl StdError for DecodeError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HashIds {
-  salt: Box<str>,
+  salt: Box<[char]>,
   alphabet: Box<[char]>,
   separators: Box<[char]>,
   min_hash_length: usize,
@@ -62,7 +63,7 @@ pub struct HashIds {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HashIdsBuilder {
-  salt: Box<str>,
+  salt: Box<[char]>,
   min_length: usize,
   alphabet: Option<Vec<char>>,
 }
@@ -72,8 +73,8 @@ impl HashIdsBuilder {
     HashIdsBuilder::default()
   }
 
-  pub fn salt(mut self, salt: String) -> Self {
-    self.salt = salt.into_boxed_str();
+  pub fn salt(mut self, salt: &str) -> Self {
+    self.salt = salt.chars().collect::<Vec<char>>().into_boxed_slice();
     self
   }
 
@@ -131,7 +132,7 @@ impl HashIdsBuilder {
       }
     };
     
-    shuffle(&mut separators, salt.as_bytes());
+    shuffle(&mut separators, &salt);
     if custom_alphabet {
       let expected_sep_len = (alphabet.len() as f32 / SEPARATOR_DIV).ceil() as usize;
       if separators.len() < expected_sep_len {
@@ -140,7 +141,7 @@ impl HashIdsBuilder {
         separators.extend(alphabet.drain(..diff));
       }
     }
-    shuffle(&mut alphabet, salt.as_bytes());
+    shuffle(&mut alphabet, &salt);
     let guard_count = (alphabet.len() as f32 / GUARD_DIV).ceil() as usize;
     let guards: Vec<char>;
     {
@@ -167,7 +168,7 @@ impl HashIds {
     HashIdsBuilder::new().build().unwrap()
   }
 
-  pub fn with_salt(salt: String) -> Self {
+  pub fn with_salt(salt: &str) -> Self {
     // Can only fail with custom alphabet
     HashIdsBuilder::new().salt(salt).build().unwrap()
   }
@@ -206,20 +207,18 @@ impl HashIds {
     let lottery = hash_chars.next().unwrap();
     let hash = hash_chars.as_str();
     let mut alphabet = self.alphabet.clone();
-    let mut buffer = String::with_capacity(alphabet.len());
+    let mut buffer = Vec::with_capacity(alphabet.len());
     buffer.push(lottery);
-    buffer.push_str(&self.salt);
-    if buffer.len() > alphabet.len() {
-      buffer.truncate(alphabet.len());
-    }
+    let needed_salt = cmp::min(self.salt.len(), alphabet.len() - 1);
+    buffer.extend_from_slice(&self.salt[..needed_salt]);
     let const_buffer_len = buffer.len();
     for sub_hash in hash.split(|ch| self.separators.contains(&ch)) {
       buffer.truncate(const_buffer_len);
       if buffer.len() < alphabet.len() {
         let extra_needed = alphabet.len() - buffer.len();
-        buffer.extend(alphabet[..extra_needed].iter());
+        buffer.extend_from_slice(&alphabet[..extra_needed]);
       }
-      shuffle(&mut alphabet, buffer.as_bytes());
+      shuffle(&mut alphabet, &buffer);
 
       if let Some(number) = unhash(sub_hash, &alphabet) {
         result.push(number);
@@ -247,18 +246,19 @@ impl HashIds {
     result.push(lottery);
 
     let mut alphabet = self.alphabet.clone();
-    let mut buffer = String::with_capacity(alphabet.len());
+    let mut buffer = Vec::with_capacity(alphabet.len());
     buffer.push(lottery);
-    buffer.push_str(&self.salt);
+    let needed_salt = cmp::min(self.salt.len(), alphabet.len() - 1);
+    buffer.extend_from_slice(&self.salt[..needed_salt]);
     let const_buffer_len = buffer.len();
     for (i, &number) in numbers.iter().enumerate() {
       buffer.truncate(const_buffer_len);
       // Don't bother adding anything from alphabet if buffer is long enough already
       if const_buffer_len < alphabet.len() {
           let extra_needed = alphabet.len() - buffer.len();
-          buffer.extend(alphabet[..extra_needed].iter().cloned());
+          buffer.extend_from_slice(&alphabet[..extra_needed]);
       }
-      shuffle(&mut alphabet, buffer.as_bytes());
+      shuffle(&mut alphabet, &buffer);
       let last_start = result.len();
       add_num_with_alphabet(&mut result, number, &alphabet);
 
@@ -284,8 +284,8 @@ impl HashIds {
     let half_len = alphabet.len() / 2;
     while result.len() < self.min_hash_length {
       buffer.clear();
-      buffer.extend(alphabet.iter().cloned());
-      shuffle(&mut alphabet, buffer.as_bytes());
+      buffer.extend_from_slice(&alphabet);
+      shuffle(&mut alphabet, &buffer);
 
       let excess = (result.len() + alphabet.len()).saturating_sub(self.min_hash_length);
       let start_pos = excess / 2;
@@ -297,20 +297,22 @@ impl HashIds {
   }
 }
 
-fn shuffle(alphabet: &mut [char], salt: &[u8]) {
-  if salt.len() <= 0 {
+fn shuffle(alphabet: &mut [char], salt: &[char]) {
+  if salt.is_empty() {
     return;
   }
 
   let len = alphabet.len();
+  let salt_len = salt.len();
 
   let mut v: usize = 0;
   let mut p: usize = 0;
 
   for i in (1..len).rev() {
-    v %= salt.len();
+    v %= salt_len;
+    // safe because of the above modulus
     let t = salt[v] as usize;
-    p += t;
+    p = p.wrapping_add(t);
     let j = (t.wrapping_add(v).wrapping_add(p)) % i;
 
     alphabet.swap(i, j);
@@ -320,10 +322,11 @@ fn shuffle(alphabet: &mut [char], salt: &[u8]) {
 }
 
 fn unhash(input: &str, alphabet: &[char]) -> Option<u64> {
+  let input_len = input.chars().count();
   let mut number: u64 = 0;
   for (i, ch) in input.chars().enumerate() {
     if let Some(pos) = alphabet.iter().position(|&x| x == ch) {
-      number += pos as u64 * (alphabet.len() as u64).pow(input.len() as u32 - i as u32 - 1);
+      number += pos as u64 * (alphabet.len() as u64).pow((input_len - i - 1) as u32);
     } else {
       return None;
     }

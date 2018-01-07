@@ -10,22 +10,43 @@ const GUARD_DIV: f32 = 12.0;
 const MIN_ALPHABET_LENGTH: usize = 16;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Error {
+pub enum BuildError {
   ShortAlphabet,
   SpaceInAlphabet,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for BuildError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.description())
   }
 }
 
-impl StdError for Error {
+impl StdError for BuildError {
   fn description(&self) -> &str {
     match *self {
-      Error::ShortAlphabet => "Invalid Alphabet Length",
-      Error::SpaceInAlphabet => "Space character found in alphabet",
+      BuildError::ShortAlphabet => "Invalid Alphabet Length",
+      BuildError::SpaceInAlphabet => "Space character found in alphabet",
+    }
+  }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum DecodeError {
+  InternalGuardChars,
+  NonAlphabetChars,
+}
+
+impl fmt::Display for DecodeError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.description())
+  }
+}
+
+impl StdError for DecodeError {
+  fn description(&self) -> &str {
+    match *self {
+      DecodeError::InternalGuardChars => "Hash contains more than 2 guard characters",
+      DecodeError::NonAlphabetChars => "Hash contains a character not found in the alphabet",
     }
   }
 }
@@ -66,7 +87,7 @@ impl HashIdsBuilder {
     self
   }
 
-  pub fn build(self) -> Result<HashIds, Error> {
+  pub fn build(self) -> Result<HashIds, BuildError> {
     let HashIdsBuilder {
       salt,
       min_length,
@@ -93,7 +114,7 @@ impl HashIdsBuilder {
           }
         });
         if contains_space {
-          return Err(Error::SpaceInAlphabet);
+          return Err(BuildError::SpaceInAlphabet);
         }
         for ch in DEFAULT_SEPARATORS.chars() {
           if alphabet_set.contains(&ch) {
@@ -101,7 +122,7 @@ impl HashIdsBuilder {
           }
         }
         if alphabet.len() + separators.len() < MIN_ALPHABET_LENGTH {
-          return Err(Error::ShortAlphabet);
+          return Err(BuildError::ShortAlphabet);
         }
         (alphabet, separators)
       }
@@ -151,62 +172,39 @@ impl HashIds {
     HashIdsBuilder::new().salt(salt).build().unwrap()
   }
 
-  pub fn encode_hex(&self, hex: &str) -> Option<String> {
-    let mut numbers: Vec<u64> = Vec::with_capacity(hex.len() / 12);
-    for chunk in hex.as_bytes().chunks(12) {
-      let mut number = 1;
-      for &ch in chunk {
-        let digit = match ch {
-          b'0'...b'9' => ch - b'0',
-          b'a'...b'f' => ch - b'a' + 10,
-          b'A'...b'F' => ch - b'A' + 10,
-          _ => return None,
-        } as u64;
-        number <<= 4;
-        number |= digit;
-      }
-      numbers.push(number);
-    }
-    Some(self.encode(&numbers))
-  }
+  pub fn decode(&self, hash: &str) -> Result<Vec<u64>, DecodeError> {
+    let guards = &self.guards[..];
+    let hash_start = hash
+        .char_indices()
+        .find(|&(_, ch)| guards.contains(&ch))
+        .map(|(i, ch)| i + ch.len_utf8())
+        .unwrap_or(0);
+    let hash_end = if hash_start == 0 {
+      hash.len()
+    } else {
+      hash[hash_start..]
+          .char_indices()
+          .rev()
+          .find(|&(_, ch)| guards.contains(&ch))
+          .map(|(i, _ch)| hash_start + i)
+          .unwrap_or_else(|| hash.len())
+    };
+    let hash = &hash[hash_start..hash_end];
 
-  pub fn decode_hex(&self, hash: &str) -> Option<String> {
-    use std::fmt::Write;
-    match self.decode(hash) {
-      Some(numbers) => {
-        let mut result = String::new();
-        let mut buffer = String::new();
-        for number in numbers {
-          write!(buffer, "{:x}", number).unwrap();
-          result.push_str(&buffer[1..]);
-          buffer.clear();
-        }
-        Some(result)
-      },
-      None => None,
+    if hash.is_empty() {
+      return Ok(vec![]);
     }
-  }
-
-  pub fn decode(&self, hash: &str) -> Option<Vec<u64>> {
-    let mut hash_chars: Vec<char> = hash.chars().collect();
-    if let Some(end_guard) = hash_chars.iter().rposition(|ch| self.guards.contains(ch)) {
-      hash_chars.truncate(end_guard);
-    }
-    if let Some(start_guard) = hash_chars.iter().position(|ch| self.guards.contains(ch)) {
-      hash_chars.drain(..start_guard);
-    }
-    if hash_chars.iter().any(|ch| self.guards.contains(ch)) {
+    if hash.chars().any(|ch| self.guards.contains(&ch)) {
       // If any guard characters are left, hash is invalid
-      return None;
-    }
-    if hash_chars.is_empty() {
-      return None;
+      return Err(DecodeError::InternalGuardChars);
     }
 
-    let num_results = hash_chars.iter().filter(|ch| self.separators.contains(ch)).count() + 1;
-    let mut result = Vec::with_capacity(num_results);
+    let mut result = Vec::new();
 
-    let lottery = hash_chars.remove(0);
+    let mut hash_chars = hash.chars();
+    // Safe because hash_chars is not empty
+    let lottery = hash_chars.next().unwrap();
+    let hash = hash_chars.as_str();
     let mut alphabet = self.alphabet.clone();
     let mut buffer = String::with_capacity(alphabet.len());
     buffer.push(lottery);
@@ -215,7 +213,7 @@ impl HashIds {
       buffer.truncate(alphabet.len());
     }
     let const_buffer_len = buffer.len();
-    for sub_hash in hash_chars.split(|ch| self.separators.contains(ch)) {
+    for sub_hash in hash.split(|ch| self.separators.contains(&ch)) {
       buffer.truncate(const_buffer_len);
       if buffer.len() < alphabet.len() {
         let extra_needed = alphabet.len() - buffer.len();
@@ -223,33 +221,14 @@ impl HashIds {
       }
       shuffle(&mut alphabet, buffer.as_bytes());
 
-      if let Some(number) = HashIds::unhash(sub_hash, &alphabet) {
+      if let Some(number) = unhash(sub_hash, &alphabet) {
         result.push(number);
       } else {
-        return None;
+        return Err(DecodeError::NonAlphabetChars);
       }
     }
 
-    if cfg!(debug_assertions) {
-      let check_hash = self._encode(&result);
-      if check_hash != hash {
-        return None;
-      }
-    }
-
-    Some(result)
-  }
-
-  fn unhash(input: &[char], alphabet: &[char]) -> Option<u64> {
-    let mut number: u64 = 0;
-    for (i, ch) in input.iter().enumerate() {
-      if let Some(pos) = alphabet.iter().position(|x| x == ch) {
-        number += pos as u64 * (alphabet.len() as u64).pow(input.len() as u32 - i as u32 - 1);
-      } else {
-        return None;
-      }
-    }
-    Some(number)
+    Ok(result)
   }
 
   pub fn encode(&self, numbers: &[u64]) -> String {
@@ -342,6 +321,18 @@ fn shuffle(alphabet: &mut [char], salt: &[u8]) {
 
     v += 1;
   }
+}
+
+fn unhash(input: &str, alphabet: &[char]) -> Option<u64> {
+  let mut number: u64 = 0;
+  for (i, ch) in input.chars().enumerate() {
+    if let Some(pos) = alphabet.iter().position(|&x| x == ch) {
+      number += pos as u64 * (alphabet.len() as u64).pow(input.len() as u32 - i as u32 - 1);
+    } else {
+      return None;
+    }
+  }
+  Some(number)
 }
 
 fn add_num_with_alphabet(hash: &mut Vec<char>, mut input: u64, alphabet: &[char]) {

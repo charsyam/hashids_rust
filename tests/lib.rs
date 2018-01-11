@@ -1,163 +1,150 @@
 extern crate hashids;
+#[macro_use]
+extern crate quickcheck;
 
-use hashids::HashIds;
+use quickcheck::TestResult;
+
+use hashids::{HashIds, HashIdsBuilder};
+use std::str;
+use std::process::Command;
 
 #[test]
 fn it_works_1() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  let ids = HashIds::with_salt("this is my salt");
 
-  let numbers: Vec<i64> = vec![12345];
+  let numbers: Vec<u64> = vec![12345];
   let encode = ids.encode(&numbers);
-  let longs = ids.decode(encode.clone());
+  let longs = ids.decode(&encode).unwrap();
 
   assert_eq!(numbers, longs);
 }
 
-#[test]
-fn it_works_2() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+fn run_javascript(salt: &str, alphabet: &str, min_len: usize, nums: &[u64]) -> Result<String, String> {
+  let mut command = Command::new("node");
 
-  let numbers: Vec<i64> = vec![12345];
-  let encode = ids.encode(&numbers);
+  command
+    .arg("-e")
+    .arg(include_str!("javascript_hashids.js"))
+    .arg("--")
+    .args(nums.iter().map(|i| i.to_string()));
 
-  let ids_some2 = HashIds::new_with_salt("this is my pepper".to_string());
-  let ids2 = match ids_some2 {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
+  command
+    .arg("-m")
+    .arg(&min_len.to_string());
+  if ! salt.is_empty() {
+    command
+      .arg("-s")
+      .arg(salt);
+  }
+  if ! alphabet.is_empty() {
+    command
+      .arg("-a")
+      .arg(alphabet);
+  }
 
-  let longs = ids2.decode(encode.clone());
-
-  assert_eq!(longs.len(), 0);
+  let mut output = command
+    .output()
+    .unwrap();
+  output.stdout.pop();
+  output.stderr.pop();
+  if output.status.success() {
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+  } else {
+    Err(String::from_utf8_lossy(&output.stderr).into_owned())
+  }
 }
 
 #[test]
-fn it_works_3() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
-
-  let numbers: Vec<i64> = vec![683, 94108, 123, 5];
-  let encode = ids.encode(&numbers);
-
-  assert_eq!(encode, "aBMswoO2UB3Sj");
+fn default_equal_explicit() {
+  let ids_def = HashIds::new();
+  let ids_exp = HashIdsBuilder::new()
+    .salt("")
+    .alphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+    .build()
+    .unwrap();
+  let data = [1, 2, 3, 4, 999];
+  assert_eq!(ids_def.encode(&data), run_javascript("", "", 0, &data).unwrap());
+  assert_eq!(ids_def.encode(&data), ids_exp.encode(&data));
 }
 
 #[test]
-fn it_works_4() {
-  let ids_some = HashIds::new_with_salt_and_min_length("this is my salt".to_string(), 8);
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
-    }
-  };
-
-  let numbers: Vec<i64> = vec![1];
-  let encode = ids.encode(&numbers);
-
-  assert_eq!(encode, "gB0NV05e");
+fn bad() {
+  let alphabet = "\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\n\u{f}\r\u{11}\u{0}\t\u{b}\u{c}";
+  let ids = HashIdsBuilder::new()
+    .alphabet(alphabet)
+    .build()
+    .unwrap();
+  let data = [13, 6, 47, 11, 25];
+  let encoded = ids.encode(&data);
+  let decoded = ids.decode(&encoded).unwrap();
+  assert_eq!(decoded, data);
 }
 
-#[test]
-fn it_works_5() {
-  let ids_some = HashIds::new("this is my salt".to_string(), 0, "0123456789abcdef".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
+quickcheck! {
+  fn encoded_decodable(salt: String, alphabet: String, min_len: usize, nums: Vec<u64>) -> TestResult {
+    let mut builder = HashIdsBuilder::new().min_length(min_len);
+    if ! salt.is_empty() {
+      builder = builder.salt(&salt);
     }
-  };
+    if ! alphabet.is_empty() {
+      builder = builder.alphabet(&alphabet)
+    }
 
-  let numbers: Vec<i64> = vec![1234567];
-  let encode = ids.encode(&numbers);
+    let ids = builder.build();
 
-  assert_eq!(encode, "b332db5");
+    match ids {
+      Ok(ids) => {
+        let encoded = ids.encode(&nums);
+        let decoded = ids.decode(&encoded).unwrap();
+        assert_eq!(decoded, nums);
+      }
+      Err(_) => {
+        return TestResult::discard();
+      }
+    }
+
+    TestResult::passed()
+  }
 }
 
-#[test]
-fn it_works_6() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
+quickcheck! {
+  fn equals_javascript(salt: String, alphabet: Vec<u8>, min_len: usize, nums: Vec<u64>) -> TestResult {
+    // make alphabet ascii
+    let mut alphabet = alphabet;
+    for ch in alphabet.iter_mut() {
+      *ch = *ch & 0x7F;
     }
-  };
-
-  let numbers: Vec<i64> = vec![5, 5, 5, 5];
-  let encode = ids.encode(&numbers);
-
-  assert_eq!(encode, "1Wc8cwcE");
-}
-
-#[test]
-fn it_works_7() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
+    let alphabet = String::from_utf8(alphabet).unwrap();
+    if salt.contains('\0') || alphabet.contains('\0') {
+      return TestResult::discard();
     }
-  };
-
-  let numbers: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  let encode = ids.encode(&numbers);
-
-  assert_eq!(encode, "kRHnurhptKcjIDTWC3sx");
-}
-
-#[test]
-fn it_works_8() {
-  let ids_some = HashIds::new_with_salt("this is my salt".to_string());
-  let ids = match ids_some {
-    Ok(v) => { v }
-    Err(_) => {
-      println!("error");
-      return;
+    if salt.chars().any(|ch| ch.len_utf16() > 1) {
+      return TestResult::discard();
     }
-  };
+    let js_result = run_javascript(&salt, &alphabet, min_len, &nums);
+    let mut builder = HashIdsBuilder::new().min_length(min_len);
+    if ! salt.is_empty() {
+      builder = builder.salt(&salt);
+    }
+    if ! alphabet.is_empty() {
+      builder = builder.alphabet(&alphabet)
+    }
 
-  let numbers_1: Vec<i64> = vec![1];
-  let encode_1 = ids.encode(&numbers_1);
-  let numbers_2: Vec<i64> = vec![2];
-  let encode_2 = ids.encode(&numbers_2);
-  let numbers_3: Vec<i64> = vec![3];
-  let encode_3 = ids.encode(&numbers_3);
-  let numbers_4: Vec<i64> = vec![4];
-  let encode_4 = ids.encode(&numbers_4);
-  let numbers_5: Vec<i64> = vec![5];
-  let encode_5 = ids.encode(&numbers_5);
+    let ids = builder.build();
 
-  assert_eq!(encode_1, "NV");
-  assert_eq!(encode_2, "6m");
-  assert_eq!(encode_3, "yD");
-  assert_eq!(encode_4, "2l");
-  assert_eq!(encode_5, "rD");
+    match ids {
+      Ok(ids) => {
+        let encoded = ids.encode(&nums);
+        assert_eq!(encoded, js_result.unwrap());
+        let decoded = ids.decode(&encoded).unwrap();
+        assert_eq!(decoded, nums);
+      }
+      Err(_) => {
+        assert!(js_result.is_err(), "{:?}", js_result);
+        return TestResult::discard();
+      }
+    }
+
+    TestResult::passed()
+  }
 }

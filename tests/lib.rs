@@ -69,14 +69,13 @@ fn default_equal_explicit() {
 
 #[test]
 fn bad() {
-  let alphabet = "\u{10}\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\t\n\u{b}\u{c}\r\u{e}\u{80}";
+  let alphabet = "\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\n\u{f}\r\u{11}\u{0}\t\u{b}\u{c}";
   let ids = HashIdsBuilder::new()
     .alphabet(alphabet)
     .build()
     .unwrap();
-  let data = [55];
+  let data = [13, 6, 47, 11, 25];
   let encoded = ids.encode(&data);
-  assert_eq!(encoded, run_javascript("", alphabet, 0, &data).unwrap());
   let decoded = ids.decode(&encoded).unwrap();
   assert_eq!(decoded, data);
 }

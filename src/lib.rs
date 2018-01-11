@@ -1,9 +1,21 @@
+//! Hashes and restores values using the "hashids" algorithm.
+//!
+//! Generates short, unique, non-sequential id strings from numbers
+//! and decodes back into numbers
+//!
+//! Allow custom alphabet as well as salt — so ids are unique only to you.
+//!
+//! For more information, see the [hashids website]
+//!
+//! [hashids website]: http://hashids.org
+
 use std::fmt;
 use std::cmp;
 use std::error::Error as StdError;
 
 use std::collections::HashSet;
 
+// Has DEFAULT_SEPARATORS already removed
 const DEFAULT_ALPHABET: &'static str =  "abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890";
 const DEFAULT_SEPARATORS: &'static str = "cfhistuCFHISTU";
 const SEPARATOR_DIV: f32 = 3.5;
@@ -73,21 +85,33 @@ impl HashIdsBuilder {
     HashIdsBuilder::default()
   }
 
+  /// A string influencing the generated hash ids
   pub fn salt(mut self, salt: &str) -> Self {
     self.salt = salt.chars().collect::<Vec<char>>().into_boxed_slice();
     self
   }
 
+  /// The minimum length for generated hashes
   pub fn min_length(mut self, min_length: usize) -> Self {
     self.min_length = min_length;
     self
   }
 
+  /// The characters to use for the generated hash ids
+  ///
+  /// Must have at least 16 unique characters, and may not contain spaces
   pub fn alphabet(mut self, alphabet: &str) -> Self {
     self.alphabet = Some(alphabet.chars().collect());
     self
   }
 
+  /// Build a [`HashIds`] instance
+  ///
+  /// ## Errors
+  /// ShortAlphabet: The alphabet did not contain at least 16 unique characters
+  /// SpaceInAlphabet: The alphabet contained a space character
+  ///
+  /// [`HashIds`]: struct.HashIds.html
   pub fn build(self) -> Result<HashIds, BuildError> {
     let HashIdsBuilder {
       salt,
@@ -163,17 +187,31 @@ impl HashIdsBuilder {
 }
 
 impl HashIds {
+  /// Create a new `HashIds` instance
   pub fn new() -> Self {
     // Can only fail with custom alphabet
     HashIdsBuilder::new().build().unwrap()
   }
 
+  /// Create a new `HashIds` instance with the specified salt.
+  ///
+  /// This is a convenience function, which is equivalent to:
+  ///
+  /// ```
+  /// use hashids::HashIdsBuilder
+  /// HashIdsBuilder::new().salt(salt).build()
+  /// ```
+  ///
+  /// except always returning success.
   pub fn with_salt(salt: &str) -> Self {
     // Can only fail with custom alphabet
     HashIdsBuilder::new().salt(salt).build().unwrap()
   }
 
-  pub fn decode(&self, hash: &str) -> Result<Vec<u64>, DecodeError> {
+  /// Restore a list of numbers from the passed `hash`
+  ///
+  /// If the hash is corrupt, return None
+  pub fn decode(&self, hash: &str) -> Option<Vec<u64>> {
     let guards = &self.guards[..];
     let hash_start = hash
         .char_indices()
@@ -193,11 +231,11 @@ impl HashIds {
     let hash = &hash[hash_start..hash_end];
 
     if hash.is_empty() {
-      return Ok(vec![]);
+      return Some(vec![]);
     }
     if hash.chars().any(|ch| self.guards.contains(&ch)) {
       // If any guard characters are left, hash is invalid
-      return Err(DecodeError::InternalGuardChars);
+      return None;
     }
 
     let mut result = Vec::new();
@@ -223,13 +261,14 @@ impl HashIds {
       if let Some(number) = unhash(sub_hash, &alphabet) {
         result.push(number);
       } else {
-        return Err(DecodeError::NonAlphabetChars);
+        return None;
       }
     }
 
-    Ok(result)
+    Some(result)
   }
 
+  /// Builds a hash from the passed `numbers`
   pub fn encode(&self, numbers: &[u64]) -> String {
     if numbers.len() == 0 {
       return String::new();

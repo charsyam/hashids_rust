@@ -1,5 +1,7 @@
 #![crate_name = "hashids"]
 
+#[macro_use]
+extern crate failure;
 extern crate regex;
 
 use regex::Regex;
@@ -12,7 +14,9 @@ const SEPARTOR_DIV: f32 = 3.5;
 const GUARD_DIV: u32 = 12;
 const MIN_ALPHABET_LENGTH: usize = 16;
 
+#[derive(Debug, Fail)]
 pub enum HashIdsError {
+    #[fail(display = "invalid alphabet length")]
     InvalidAlphabetLength,
 }
 

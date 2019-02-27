@@ -118,7 +118,7 @@ impl HashIds {
         let arr = salt.as_bytes();
         let len = alphabet.len();
         let mut bytes = alphabet.into_bytes();
-        let mut shuffle = &mut bytes[..];
+        let shuffle = &mut bytes[..];
 
         let mut i: usize = len - 1;
         let mut v: usize = 0;

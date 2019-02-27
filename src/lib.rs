@@ -20,6 +20,7 @@ pub enum HashIdsError {
     InvalidAlphabetLength,
 }
 
+#[derive(Debug)]
 pub struct HashIds {
     salt: String,
     pub alphabet: String,
